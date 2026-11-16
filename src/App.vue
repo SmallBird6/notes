@@ -10,6 +10,7 @@ import { contentDir, githubBranch, githubOwner, githubRepo, THEME_STORAGE_KEY } 
 import { buildTree, entryByPath, flattenArticles, markLoggedOut, notes, refresh, removePath } from './content/catalog'
 import { explainError } from './github/client'
 import { isWritablePath, repoPathToEditRoute, writablePath } from './github/paths'
+import { bodyFontSize, MAX_BODY_FONT_SIZE, MIN_BODY_FONT_SIZE, stepBodyFontSize } from './session/reading'
 import { clearToken } from './session/token'
 import { sidebarOpen, tokenDialogOpen } from './session/ui'
 
@@ -108,6 +109,11 @@ watch(() => route.path, () => {
       <SearchBox />
       <div class="top-actions">
         <button type="button" :disabled="notes.loading" @click="refresh(true)">{{ notes.loading ? '读取中' : '刷新' }}</button>
+        <div class="type-size" role="group" aria-label="正文字号">
+          <button type="button" aria-label="减小字号" :disabled="bodyFontSize <= MIN_BODY_FONT_SIZE" @click="stepBodyFontSize(-1)">A-</button>
+          <span>{{ bodyFontSize }}</span>
+          <button type="button" aria-label="增大字号" :disabled="bodyFontSize >= MAX_BODY_FONT_SIZE" @click="stepBodyFontSize(1)">A+</button>
+        </div>
         <button type="button" @click="cycleTheme">{{ themeLabel }}</button>
         <template v-if="notes.tokenOk">
           <button type="button" @click="showNew = true">新建</button>

@@ -79,9 +79,22 @@ describe('markdown rules', () => {
     expect(render('$$\na^2\n$$')).toContain('katex-display')
   })
 
+  it('hides leading YAML front matter without removing a later rule', () => {
+    const source = '---\ntitle: 怎么写\n---\n\n# 怎么写\n\n正文\n\n---\n\n下一段\n'
+    const html = render(source)
+    expect(source.startsWith('---')).toBe(true)
+    expect(html).not.toContain('title:')
+    expect(html).toContain('<h1')
+    expect(html).toContain('怎么写')
+    expect(html).toContain('<hr')
+    expect(html).toContain('下一段')
+  })
+
   it('renders the Chinese sample articles with the section 8 rules', () => {
     const home = render(readFileSync('content/index.md', 'utf8'), 'content/index.md')
     const write = render(readFileSync('content/guide/write.md', 'utf8'), 'content/guide/write.md')
+    expect(home).not.toContain('title:')
+    expect(write).not.toContain('title:')
     expect(home).toContain('class="callout tip"')
     expect(home).toContain('有多篇同名笔记')
     expect(home).toContain('katex')

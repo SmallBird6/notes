@@ -48,6 +48,13 @@ const CALLOUT_TITLES: Record<CalloutType, string> = {
 
 export type Heading = { level: number; text: string; slug: string }
 
+/** Leading YAML block only. The saved note is left unchanged. */
+export function frontMatter(source: string): { body: string; fields: string | null } {
+  const match = /^(?:\uFEFF)?---[ \t]*\r?\n([\s\S]*?)\r?\n(?:---|\.\.\.)[ \t]*\r?\n?/.exec(source)
+  if (!match) return { body: source, fields: null }
+  return { body: source.slice(match[0].length), fields: match[1] }
+}
+
 export type RenderContext = {
   currentPath: string
   entries: Pick<TreeEntry, 'path' | 'kind'>[]
@@ -276,7 +283,7 @@ function applyHtmlSlots(html: string, callouts: string[], maths: MathBlock[]): s
 }
 
 export function renderMarkdown(source: string, context: RenderContext): { html: string; headings: Heading[] } {
-  const masked = maskCode(source)
+  const masked = maskCode(frontMatter(source).body)
   const callouts: string[] = []
   const maths: MathBlock[] = []
   const processed = unmaskCode(

@@ -6,6 +6,7 @@ import { markdown } from '@codemirror/lang-markdown'
 import { bracketMatching, defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { EditorState } from '@codemirror/state'
 import { EditorView, keymap, lineNumbers } from '@codemirror/view'
+import ColumnResize from '../components/ColumnResize.vue'
 import { notes, reloadConflict, saveText, setCurrentPath } from '../content/catalog'
 import { explainError, fetchRawText, GitHubError } from '../github/client'
 import { editRouteToRepoPath, initialDocument, isWritablePath } from '../github/paths'
@@ -45,8 +46,8 @@ function mountEditor(text: string): void {
       EditorView.lineWrapping,
       EditorView.theme({
         '&': { backgroundColor: 'var(--paper)', color: 'var(--text)', fontSize: '15px' },
-        '.cm-content': { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', minHeight: '70vh', padding: '12px 0' },
-        '.cm-gutters': { backgroundColor: 'transparent', color: 'var(--muted)', border: 'none' },
+        '.cm-content': { fontFamily: 'Consolas, monospace', minHeight: '70vh', padding: '12px 0' },
+        '.cm-gutters': { backgroundColor: 'transparent', color: 'var(--muted)', border: 'none', fontFamily: 'Consolas, monospace' },
         '&.cm-focused': { outline: 'none' },
       }),
     ],
@@ -163,6 +164,7 @@ defineExpose({ save })
 
 <template>
   <section class="editor-pane">
+    <ColumnResize />
     <div class="editor-bar">
       <p class="editor-path">{{ repoPath || '未选择文章' }}</p>
       <button type="button" class="primary" :disabled="notes.saving || !repoPath" @click="save">

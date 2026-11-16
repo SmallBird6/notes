@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import ColumnResize from '../components/ColumnResize.vue'
 import { buildTree, flattenArticles, loadText, notes, setCurrentPath, titleFor } from '../content/catalog'
 import { renderMarkdown } from '../content/render'
 import { resolveRoutePath } from '../github/paths'
@@ -87,6 +88,7 @@ onMounted(() => {
 
 <template>
   <article class="article">
+    <ColumnResize />
     <p v-if="missing" class="missing">这篇还不存在。</p>
     <div v-else ref="articleRef" class="markdown" v-html="html"></div>
     <nav v-if="!missing" class="pager">

@@ -16,7 +16,7 @@ import {
   type WriteResult,
 } from '../github/client'
 import { fileKind, parentDir, repoPathToRoute } from '../github/paths'
-import type { Heading } from './render'
+import { frontMatter, type Heading } from './render'
 import { clearToken, readToken } from '../session/token'
 
 export type { TreeEntry, WriteResult }
@@ -125,13 +125,14 @@ function unquote(value: string): string {
 
 export function titleFromText(text: string | undefined, filename: string): string {
   if (text) {
-    const front = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)
-    if (front) {
-      const title = /^title:\s*(.+)$/m.exec(front[1])
-      if (title) return unquote(title[1].trim())
+    const matter = frontMatter(text)
+    if (matter.fields) {
+      const title = /^title:\s*(.+)$/m.exec(matter.fields)
+      const value = title ? unquote(title[1].trim()) : ''
+      if (value) return value
     }
     let inFence = false
-    for (const line of text.split(/\r?\n/)) {
+    for (const line of matter.body.split(/\r?\n/)) {
       if (line.startsWith('```')) {
         inFence = !inFence
         continue
