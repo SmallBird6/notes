@@ -7,9 +7,11 @@ import { bracketMatching, defaultHighlightStyle, syntaxHighlighting } from '@cod
 import { EditorState } from '@codemirror/state'
 import { EditorView, keymap, lineNumbers } from '@codemirror/view'
 import ColumnResize from '../components/ColumnResize.vue'
-import { notes, reloadConflict, saveText, setCurrentPath } from '../content/catalog'
+import { MAX_FILE_BYTES } from '../config'
+import { notes, uploadFile, reloadConflict, saveText, setCurrentPath } from '../content/catalog'
+import { clipboardImageFiles, pastedImageName } from '../content/pasteImage'
 import { explainError, fetchRawText, GitHubError } from '../github/client'
-import { editRouteToRepoPath, initialDocument, isWritablePath } from '../github/paths'
+import { editRouteToRepoPath, initialDocument, isWritablePath, parentDir } from '../github/paths'
 import { requestLogin } from '../session/ui'
 
 const route = useRoute()
@@ -18,8 +20,75 @@ const view = shallowRef<EditorView | null>(null)
 const savedText = ref('')
 const status = ref('')
 const loadedPath = ref('')
+const reservedImages = new Set<string>()
 const repoPath = computed(() => editRouteToRepoPath(route.path))
 const dirty = computed(() => (view.value ? view.value.state.doc.toString() : '') !== savedText.value)
+
+function takenImageNames(dir: string): Set<string> {
+  const taken = new Set(reservedImages)
+  const prefix = `${dir}/`
+  for (const entry of notes.entries) {
+    if (entry.path.startsWith(prefix)) taken.add(entry.path.slice(prefix.length))
+  }
+  return taken
+}
+
+function insertEmbed(editor: EditorView, embed: string): number {
+  const range = editor.state.selection.main
+  editor.dispatch({
+    changes: { from: range.from, to: range.to, insert: embed },
+    selection: { anchor: range.from + embed.length },
+  })
+  return range.from
+}
+
+function removeEmbed(editor: EditorView, from: number, embed: string): void {
+  if (view.value !== editor) return
+  if (editor.state.sliceDoc(from, from + embed.length) !== embed) return
+  editor.dispatch({ changes: { from, to: from + embed.length, insert: '' } })
+}
+
+async function insertPastedImages(editor: EditorView, files: File[]): Promise<void> {
+  if (!notes.tokenOk) {
+    requestLogin()
+    status.value = '请先登录'
+    return
+  }
+  const dir = parentDir(repoPath.value)
+  for (const file of files) {
+    const name = pastedImageName(file.type, new Date(), takenImageNames(dir))
+    if (!name) continue
+    const path = `${dir}/${name}`.normalize('NFC')
+    if (file.size > MAX_FILE_BYTES) {
+      status.value = `${path} 超过 1 MB`
+      continue
+    }
+    if (!isWritablePath(path)) {
+      status.value = `${path} 不是可写入的 Markdown 或图片`
+      continue
+    }
+    reservedImages.add(name)
+    const embed = `![[${name}]]`
+    const from = insertEmbed(editor, embed)
+    try {
+      await uploadFile(path, file)
+      status.value = '已插入图片'
+    } catch (error) {
+      reservedImages.delete(name)
+      removeEmbed(editor, from, embed)
+      status.value = explainError(error)
+      return
+    }
+  }
+}
+
+function onPaste(event: ClipboardEvent, editor: EditorView): boolean {
+  const files = clipboardImageFiles(event.clipboardData)
+  if (files.length === 0) return false
+  event.preventDefault()
+  void insertPastedImages(editor, files)
+  return true
+}
 
 function lineSeparator(text: string): string | undefined {
   return text.includes('\r\n') ? '\r\n' : undefined
@@ -43,6 +112,7 @@ function mountEditor(text: string): void {
         ...defaultKeymap,
         { key: 'Mod-s', run: () => { void save(); return true } },
       ]),
+      EditorView.domEventHandlers({ paste: onPaste }),
       EditorView.lineWrapping,
       EditorView.theme({
         '&': { backgroundColor: 'var(--paper)', color: 'var(--text)', fontSize: '15px' },

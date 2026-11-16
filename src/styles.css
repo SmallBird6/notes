@@ -236,8 +236,6 @@ body.col-resizing { cursor: col-resize; user-select: none; }
 .callout.danger { border-left-color: var(--callout-danger); }
 .callout.important { border-left-color: var(--important); }
 .wikilink.broken { color: var(--muted); }
-.pager { display: flex; justify-content: space-between; gap: 16px; margin-top: 40px; font-family: "Segoe UI", "PingFang SC", sans-serif; }
-.pager a { max-width: 46%; }
 .missing, .status, .banner, .error { font-family: "Segoe UI", "PingFang SC", sans-serif; }
 .banner, .error { color: var(--danger); }
 .banner { margin: 0; padding: 10px 16px; background: color-mix(in srgb, var(--danger) 12%, var(--paper)); }
