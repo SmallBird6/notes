@@ -103,6 +103,8 @@ describe('markdown rules', () => {
     expect(home).toContain('&lt;script&gt;')
     expect(home).not.toContain('<script>')
     expect(write).toContain('class="callout warning"')
+    expect(write).toContain('content/../src/main.ts')
+    expect(write).not.toContain('CODE')
     expect(write).toContain('https://raw.githubusercontent.com/SmallBird6/notes/abc123/content/guide/%E5%9B%BE.png')
     expect(write).toContain('/notes/guide/%E7%A4%BA%E4%BE%8B')
     expect(write).toContain('没有这篇笔记')

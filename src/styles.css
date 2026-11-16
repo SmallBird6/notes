@@ -333,39 +333,120 @@ body.col-resizing { cursor: col-resize; user-select: none; }
   text-align: center;
 }
 .markdown {
-  font-family: "Google Sans", sans-serif;
+  font-family: "Google Sans", "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
   font-size: var(--body-font-size, 17px);
   line-height: 1.85;
+  color: var(--text);
+  text-rendering: optimizeLegibility;
+  overflow-wrap: break-word;
 }
-.markdown h1, .markdown h2, .markdown h3 { color: var(--text); line-height: 1.28; font-weight: 700; letter-spacing: -0.02em; }
-.markdown h1 { font-size: 2.05em; margin: 0.15em 0 0.55em; }
-.markdown h2 { font-size: 1.55em; margin: 1.45em 0 0.45em; }
-.markdown h3 { font-size: 1.2em; margin: 1.3em 0 0.35em; }
-.markdown p, .markdown li { margin: 0.85em 0; }
-.markdown p { color: color-mix(in srgb, var(--text) 92%, var(--muted)); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .markdown pre code.hljs { color: #e6edf3; }
+}
+:root[data-theme='dark'] .markdown pre code.hljs { color: #e6edf3; }
+.markdown > :first-child { margin-top: 0; }
+.markdown h1, .markdown h2, .markdown h3, .markdown h4, .markdown h5, .markdown h6 {
+  color: var(--text);
+  font-weight: 650;
+  line-height: 1.35;
+  letter-spacing: 0;
+  text-wrap: pretty;
+}
+.markdown h1 { font-size: 1.9em; margin: 0 0 0.55em; }
+.markdown h2 { font-size: 1.48em; margin: 1.55em 0 0.45em; padding-bottom: 0.28em; border-bottom: 1px solid var(--line); }
+.markdown h3 { font-size: 1.24em; margin: 1.35em 0 0.4em; }
+.markdown h4 { font-size: 1.08em; margin: 1.2em 0 0.35em; }
+.markdown h5, .markdown h6 { font-size: 1em; margin: 1.1em 0 0.3em; color: color-mix(in srgb, var(--text) 82%, var(--muted)); }
+.markdown p { margin: 0.85em 0; }
+.markdown strong { font-weight: 650; }
+.markdown a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 38%, transparent);
+  text-underline-offset: 0.18em;
+  text-decoration-thickness: 1px;
+}
+.markdown a:hover { text-decoration-color: var(--accent); }
+.markdown ul, .markdown ol { margin: 0.55em 0 0.9em; padding-left: 1.45em; }
+.markdown li { margin: 0.28em 0; padding-left: 0.15em; }
+.markdown li > p { margin: 0.2em 0; }
+.markdown li::marker { color: var(--muted); }
+.markdown ul ul, .markdown ul ol, .markdown ol ul, .markdown ol ol { margin: 0.2em 0; }
+.markdown blockquote {
+  margin: 1em 0;
+  padding: 0.15em 0 0.15em 0.95em;
+  border-left: 3px solid color-mix(in srgb, var(--muted) 55%, var(--line));
+  color: color-mix(in srgb, var(--text) 78%, var(--muted));
+}
+.markdown blockquote p { margin: 0.35em 0; }
+.markdown hr { border: 0; border-top: 1px solid var(--line); margin: 1.8em 0; }
+.markdown :not(pre) > code {
+  font-family: Consolas, monospace;
+  font-size: 0.9em;
+  padding: 0.12em 0.38em;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--text) 7%, var(--paper));
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+}
 .markdown pre {
   overflow: auto;
-  padding: 12px 14px;
+  margin: 1.05em 0;
+  padding: 0.95em 1.05em;
+  border: 1px solid var(--line);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--sidebar) 88%, var(--line));
-  font-family: Consolas, monospace;
-  font-size: 14px;
+  background: color-mix(in srgb, var(--text) 4.5%, var(--paper));
+  line-height: 1.55;
 }
-.markdown code { font-family: Consolas, monospace; font-size: 0.92em; }
-.markdown img { max-width: 100%; border-radius: 8px; }
-.markdown table { border-collapse: collapse; }
-.markdown th, .markdown td { border: 1px solid var(--line); padding: 6px 8px; }
-.callout { border: 1px solid var(--line); border-left-width: 4px; border-radius: 10px; padding: 10px 12px; margin: 16px 0; background: var(--sidebar); }
-.callout-title { margin: 0 0 6px; font-weight: 700; font-family: "Segoe UI", "PingFang SC", sans-serif; }
-.callout-body { color: var(--text); }
-.callout.note { border-left-color: var(--note); }
-.callout.tip { border-left-color: var(--tip); }
-.callout.info { border-left-color: var(--info); }
-.callout.warning { border-left-color: var(--warning); }
-.callout.caution { border-left-color: var(--caution); }
-.callout.danger { border-left-color: var(--callout-danger); }
-.callout.important { border-left-color: var(--important); }
-.wikilink.broken { color: var(--muted); }
+.markdown pre code, .markdown pre code.hljs {
+  font-family: Consolas, monospace;
+  font-size: 0.86em;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.markdown img { display: block; max-width: 100%; height: auto; margin: 1.05em 0; border-radius: 8px; }
+.markdown table {
+  width: 100%;
+  margin: 1.1em 0;
+  border-collapse: collapse;
+  font-size: 0.95em;
+  line-height: 1.55;
+}
+.markdown th, .markdown td {
+  border: 1px solid var(--line);
+  padding: 0.55em 0.75em;
+  text-align: left;
+  vertical-align: top;
+}
+.markdown thead th { background: color-mix(in srgb, var(--text) 5%, var(--paper)); font-weight: 650; }
+.markdown tbody tr:nth-child(even) { background: color-mix(in srgb, var(--text) 3%, transparent); }
+.markdown .katex-display { margin: 1em 0; overflow-x: auto; overflow-y: hidden; }
+.markdown .callout {
+  --callout-color: var(--muted);
+  margin: 1.15em 0;
+  padding: 0.75em 0.95em 0.8em;
+  border: 1px solid color-mix(in srgb, var(--callout-color) 28%, var(--line));
+  border-left: 4px solid var(--callout-color);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--callout-color) 9%, var(--paper));
+}
+.markdown .callout-title {
+  margin: 0 0 0.35em;
+  font-family: inherit;
+  font-weight: 650;
+  line-height: 1.4;
+  color: var(--callout-color);
+}
+.markdown .callout-body { color: var(--text); line-height: 1.7; }
+.markdown .callout.note { --callout-color: var(--note); }
+.markdown .callout.tip { --callout-color: var(--tip); }
+.markdown .callout.info { --callout-color: var(--info); }
+.markdown .callout.warning { --callout-color: var(--warning); }
+.markdown .callout.caution { --callout-color: var(--caution); }
+.markdown .callout.danger { --callout-color: var(--callout-danger); }
+.markdown .callout.important { --callout-color: var(--important); }
+.markdown .wikilink.broken { color: var(--muted); text-decoration: none; }
 .missing, .status, .banner, .error { font-family: "Segoe UI", "PingFang SC", sans-serif; }
 .banner, .error { color: var(--danger); }
 .banner { margin: 0; padding: 10px 16px; background: color-mix(in srgb, var(--danger) 12%, var(--paper)); }

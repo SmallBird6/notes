@@ -192,7 +192,7 @@ function replaceWikilinks(source: string, context: RenderContext): string {
   })
 }
 
-function replaceCallouts(source: string, htmlBlocks: string[]): string {
+function replaceCallouts(source: string, htmlBlocks: string[], codeBlocks: string[]): string {
   const lines = source.split('\n')
   const output: string[] = []
   let index = 0
@@ -214,8 +214,8 @@ function replaceCallouts(source: string, htmlBlocks: string[]): string {
       continue
     }
     const type = match[1].toLowerCase() as CalloutType
-    const title = match[2].trim() || CALLOUT_TITLES[type]
-    const body = block.slice(1).map((line) => line.replace(/^>\s?/, '')).join('\n')
+    const title = unmaskCode(match[2].trim() || CALLOUT_TITLES[type], codeBlocks)
+    const body = unmaskCode(block.slice(1).map((line) => line.replace(/^>\s?/, '')).join('\n'), codeBlocks)
     const id = htmlBlocks.push(renderCallout(type, title, body)) - 1
     output.push('', `@@CALLOUT${id}@@`, '')
   }
@@ -287,7 +287,7 @@ export function renderMarkdown(source: string, context: RenderContext): { html: 
   const callouts: string[] = []
   const maths: MathBlock[] = []
   const processed = unmaskCode(
-    replaceMath(replaceCallouts(replaceWikilinks(replaceImages(masked.text, context), context), callouts), maths),
+    replaceMath(replaceCallouts(replaceWikilinks(replaceImages(masked.text, context), context), callouts, masked.blocks), maths),
     masked.blocks,
   )
   const tokens = markdown.parse(processed, {})
