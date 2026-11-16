@@ -1,3 +1,4 @@
+import { CATALOG_PATH } from '../content/catalogFile'
 import { contentDir, githubBranch, githubOwner, githubRepo, MAX_FILE_BYTES } from '../config'
 import { decodeBase64Utf8, encodeBase64Bytes, encodeBase64Utf8 } from './codec'
 import { encodeGitHubPath, fileKind, writablePath } from './paths'
@@ -30,14 +31,8 @@ export class GitHubError extends Error {
   }
 }
 
-let rawMode: 'unknown' | 'ok' | 'blocked' = 'unknown'
-
-export function isRawBlocked(): boolean {
-  return rawMode === 'blocked'
-}
-
-export function rawFileUrl(commitSha: string, path: string): string {
-  return `https://raw.githubusercontent.com/${githubOwner}/${githubRepo}/${commitSha}/${encodeGitHubPath(path)}`
+export function rawFileUrl(ref: string, path: string): string {
+  return `https://raw.githubusercontent.com/${githubOwner}/${githubRepo}/${ref}/${encodeGitHubPath(path)}`
 }
 
 function restHeaders(token?: string, accept = 'application/vnd.github+json'): Headers {
@@ -90,10 +85,10 @@ export function explainError(error: unknown): string {
   return '网络失败，目录保持上次成功的快照'
 }
 
-export async function getCommitSha(): Promise<string> {
+export async function getCommitSha(token: string): Promise<string> {
   const response = await request(
     `${API}/repos/${githubOwner}/${githubRepo}/commits/${encodeURIComponent(githubBranch)}`,
-    { headers: restHeaders() },
+    { headers: restHeaders(token) },
   )
   const data = (await response.json()) as { sha?: string }
   if (!data.sha) throw new GitHubError('没有提交号', 404)
@@ -105,10 +100,10 @@ type GitTreeResponse = {
   tree?: { path?: string; type?: string; sha?: string; size?: number }[]
 }
 
-export async function getContentTree(commitSha: string): Promise<{ entries: TreeEntry[]; truncated: boolean }> {
+export async function getContentTree(commitSha: string, token: string): Promise<{ entries: TreeEntry[]; truncated: boolean }> {
   const response = await request(
     `${API}/repos/${githubOwner}/${githubRepo}/git/trees/${commitSha}?recursive=1`,
-    { headers: restHeaders() },
+    { headers: restHeaders(token) },
   )
   const data = (await response.json()) as GitTreeResponse
   if (data.truncated) return { entries: [], truncated: true }
@@ -128,26 +123,35 @@ export async function getContentTree(commitSha: string): Promise<{ entries: Tree
   return { entries, truncated: false }
 }
 
-export async function fetchRawText(commitSha: string, path: string): Promise<string> {
-  if (rawMode !== 'blocked') {
-    try {
-      const response = await fetch(rawFileUrl(commitSha, path))
-      if (response.ok) {
-        rawMode = 'ok'
-        return await response.text()
-      }
-      if (response.status === 404) throw new GitHubError('这篇还不存在', 404)
-      throw new GitHubError('读取正文失败', response.status)
-    } catch (error) {
-      if (error instanceof GitHubError) throw error
-      rawMode = 'blocked'
-    }
+export async function fetchAnonymousCatalogText(): Promise<string> {
+  const url = rawFileUrl(githubBranch, CATALOG_PATH)
+  let response: Response
+  try {
+    response = await fetch(url)
+  } catch {
+    throw new GitHubError('网络失败', 0)
   }
-  const response = await request(
-    `${API}/repos/${githubOwner}/${githubRepo}/contents/${encodeGitHubPath(path)}?ref=${encodeURIComponent(commitSha)}`,
-    { headers: restHeaders(undefined, 'application/vnd.github.raw') },
-  )
+  if (response.status === 404) throw new GitHubError('目录清单不存在', 404)
+  if (!response.ok) throw new GitHubError('读取目录失败', response.status)
   return response.text()
+}
+
+export async function fetchRawText(ref: string, path: string, token?: string): Promise<string> {
+  let response: Response
+  try {
+    response = await fetch(rawFileUrl(ref, path))
+  } catch {
+    if (!token) throw new GitHubError('网络失败', 0)
+    response = new Response(null, { status: 599 })
+  }
+  if (response.ok) return response.text()
+  if (response.status === 404) throw new GitHubError('这篇还不存在', 404)
+  if (!token) throw new GitHubError('读取正文失败', response.status)
+  const api = await request(
+    `${API}/repos/${githubOwner}/${githubRepo}/contents/${encodeGitHubPath(path)}?ref=${encodeURIComponent(ref)}`,
+    { headers: restHeaders(token, 'application/vnd.github.raw') },
+  )
+  return api.text()
 }
 
 export async function verifyToken(token: string): Promise<void> {
@@ -202,6 +206,37 @@ export async function putContent(
   const nextBlob = data.content?.sha
   if (!commitSha || !nextBlob) throw new GitHubError('写入响应不完整', 502)
   return { commitSha, path: canonical, blobSha: nextBlob }
+}
+
+export async function putCatalog(token: string, text: string, blobSha?: string): Promise<WriteResult> {
+  const bytes = new TextEncoder().encode(text)
+  assertBytes(bytes.byteLength)
+  const body: Record<string, string> = {
+    message: `${blobSha ? '更新' : '新增'} ${CATALOG_PATH}`,
+    content: encodeBase64Utf8(text),
+    branch: githubBranch,
+  }
+  if (blobSha) body.sha = blobSha
+  const response = await request(`${API}/repos/${githubOwner}/${githubRepo}/contents/${encodeGitHubPath(CATALOG_PATH)}`, {
+    method: 'PUT',
+    headers: restHeaders(token),
+    body: JSON.stringify(body),
+  })
+  const data = (await response.json()) as ContentResponse
+  const commitSha = data.commit?.sha
+  const nextBlob = data.content?.sha
+  if (!commitSha || !nextBlob) throw new GitHubError('写入响应不完整', 502)
+  return { commitSha, path: CATALOG_PATH, blobSha: nextBlob }
+}
+
+export async function getCatalogBlob(token: string): Promise<{ sha: string; text: string }> {
+  const response = await request(
+    `${API}/repos/${githubOwner}/${githubRepo}/contents/${encodeGitHubPath(CATALOG_PATH)}?ref=${encodeURIComponent(githubBranch)}`,
+    { headers: restHeaders(token) },
+  )
+  const data = (await response.json()) as { sha?: string; content?: string }
+  if (!data.sha || !data.content) throw new GitHubError('目录清单不存在', 404)
+  return { sha: data.sha, text: decodeBase64Utf8(data.content.replace(/\n/g, '')) }
 }
 
 export async function putText(token: string, path: string, text: string, blobSha?: string): Promise<WriteResult> {

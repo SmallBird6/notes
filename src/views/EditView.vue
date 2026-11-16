@@ -12,6 +12,7 @@ import { notes, uploadFile, reloadConflict, saveText, setCurrentPath } from '../
 import { clipboardImageFiles, pastedImageName } from '../content/pasteImage'
 import { explainError, fetchRawText, GitHubError } from '../github/client'
 import { editRouteToRepoPath, initialDocument, isWritablePath, parentDir } from '../github/paths'
+import { readToken } from '../session/token'
 import { requestLogin } from '../session/ui'
 
 const route = useRoute()
@@ -156,7 +157,7 @@ async function open(): Promise<void> {
     return
   }
   try {
-    const text = await fetchRawText(notes.commitSha, path)
+    const text = await fetchRawText(notes.commitSha, path, readToken() ?? undefined)
     notes.texts.set(path, text)
     notes.revision += 1
     adopt(path, text, '')

@@ -1,20 +1,23 @@
 import { reactive } from 'vue'
-import { contentDir } from '../config'
+import { contentDir, githubBranch } from '../config'
 import {
   deleteContent,
   explainError,
+  fetchAnonymousCatalogText,
   fetchRawText,
+  getCatalogBlob,
   getCommitSha,
   getContentTree,
   getFileBlob,
   GitHubError,
-  isRawBlocked,
   putBytes,
+  putCatalog,
   putText,
   verifyToken,
   type TreeEntry,
   type WriteResult,
 } from '../github/client'
+import { anonymousCatalogDue, CATALOG_PATH, parseCatalog, serializeCatalog } from './catalogFile'
 import { fileKind, parentDir, repoPathToRoute } from '../github/paths'
 import { frontMatter, type Heading } from './render'
 import { clearToken, readToken } from '../session/token'
@@ -65,7 +68,11 @@ export const notes = reactive<NoteState>({
   headings: [],
 })
 
-let lastCommitCheck = 0
+const AUTH_REFRESH_MS = 30_000
+const ANON_CACHE_KEY = 'notes.catalog'
+
+let lastAuthCheck = 0
+let anonCheckedAt = 0
 let started = false
 let writeChain: Promise<unknown> = Promise.resolve()
 let textLoads = 0
@@ -76,6 +83,27 @@ function touch(): void {
 
 function cacheKey(sha: string): string {
   return `notes.tree.${sha}`
+}
+
+function readAnonCache(): { at: number; paths: string[] } | null {
+  try {
+    const raw = sessionStorage.getItem(ANON_CACHE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { at?: number; paths?: unknown }
+    if (!parsed || typeof parsed.at !== 'number' || !Array.isArray(parsed.paths)) return null
+    const paths = parsed.paths.filter((item): item is string => typeof item === 'string')
+    return { at: parsed.at, paths }
+  } catch {
+    return null
+  }
+}
+
+function writeAnonCache(paths: string[], at: number): void {
+  try {
+    sessionStorage.setItem(ANON_CACHE_KEY, JSON.stringify({ at, paths }))
+  } catch {
+    /* 缓存写不进去时仍然使用内存目录 */
+  }
 }
 
 function readCache(sha: string): TreeEntry[] | null {
@@ -257,19 +285,36 @@ function rememberText(path: string, text: string): void {
   touch()
 }
 
-async function preloadTexts(sha: string): Promise<void> {
+function catalogPaths(): string[] {
+  return notes.entries.filter((entry) => entry.kind === 'md' || entry.kind === 'image').map((entry) => entry.path)
+}
+
+function applyCatalogPaths(paths: string[]): void {
+  if (notes.commitSha !== githubBranch) notes.texts = new Map()
+  notes.commitSha = githubBranch
+  notes.entries = paths.map((path) => ({
+    path,
+    sha: '',
+    size: 0,
+    kind: fileKind(path),
+  }))
+  notes.truncated = false
+  notes.error = ''
+  touch()
+}
+
+async function preloadTexts(ref: string, token?: string): Promise<void> {
   const generation = ++textLoads
   for (const entry of notes.entries) {
-    if (generation !== textLoads || notes.commitSha !== sha) return
+    if (generation !== textLoads || notes.commitSha !== ref) return
     if (entry.kind !== 'md' || notes.texts.has(entry.path)) continue
-    if (isRawBlocked()) return
     try {
-      const text = await fetchRawText(sha, entry.path)
-      if (generation !== textLoads || notes.commitSha !== sha) return
+      const text = await fetchRawText(ref, entry.path, token)
+      if (generation !== textLoads || notes.commitSha !== ref) return
       rememberText(entry.path, text)
     } catch (error) {
       if (error instanceof GitHubError && error.status === 404) continue
-      if (isRawBlocked()) return
+      return
     }
   }
 }
@@ -279,7 +324,7 @@ export async function loadText(path: string): Promise<string | null> {
   if (cached !== undefined && notes.commitSha) return cached
   if (!notes.commitSha) return null
   try {
-    const text = await fetchRawText(notes.commitSha, path)
+    const text = await fetchRawText(notes.commitSha, path, readToken() ?? undefined)
     if (notes.commitSha) rememberText(path, text)
     return text
   } catch (error) {
@@ -289,13 +334,93 @@ export async function loadText(path: string): Promise<string | null> {
   }
 }
 
-export async function refresh(force = false): Promise<void> {
+async function refreshAnonymous(force: boolean): Promise<void> {
   const now = Date.now()
-  if (!force && lastCommitCheck !== 0 && now - lastCommitCheck < 30_000) return
-  lastCommitCheck = now
+  const cached = readAnonCache()
+  const lastAt = Math.max(cached?.at ?? 0, anonCheckedAt)
+  if (!anonymousCatalogDue(lastAt, now, force)) {
+    if (cached && (notes.entries.length === 0 || notes.commitSha !== githubBranch)) {
+      applyCatalogPaths(cached.paths)
+      void preloadTexts(githubBranch)
+    }
+    return
+  }
   notes.loading = true
   try {
-    const sha = await getCommitSha()
+    const text = await fetchAnonymousCatalogText()
+    const paths = parseCatalog(text)
+    const at = Date.now()
+    anonCheckedAt = at
+    writeAnonCache(paths, at)
+    applyCatalogPaths(paths)
+    void preloadTexts(githubBranch)
+  } catch (error) {
+    anonCheckedAt = Date.now()
+    if (error instanceof Error && error.message === '目录清单无法读取') {
+      notes.error = '目录清单无法读取'
+      return
+    }
+    if (error instanceof GitHubError && error.status === 404) {
+      notes.error = '目录清单不存在'
+      return
+    }
+    notes.error = explainError(error)
+  } finally {
+    notes.loading = false
+  }
+}
+
+function rememberCatalog(result: WriteResult): void {
+  notes.commitSha = result.commitSha
+  const existing = entryByPath(CATALOG_PATH)
+  if (existing) existing.sha = result.blobSha
+  else {
+    notes.entries.push({
+      path: CATALOG_PATH,
+      sha: result.blobSha,
+      size: 0,
+      kind: 'other',
+    })
+  }
+  writeCache()
+}
+
+async function syncCatalog(token: string): Promise<void> {
+  const text = serializeCatalog(catalogPaths())
+  let sha = entryByPath(CATALOG_PATH)?.sha
+  if (!sha) {
+    try {
+      const current = await getCatalogBlob(token)
+      sha = current.sha
+      rememberCatalog({ commitSha: notes.commitSha, path: CATALOG_PATH, blobSha: sha })
+    } catch (error) {
+      if (!(error instanceof GitHubError) || error.status !== 404) throw error
+      sha = undefined
+    }
+  }
+  try {
+    const result = await putCatalog(token, text, sha || undefined)
+    rememberCatalog(result)
+  } catch (error) {
+    if (error instanceof GitHubError && error.status === 409) {
+      try {
+        const fresh = await getCatalogBlob(token)
+        rememberCatalog({ commitSha: notes.commitSha, path: CATALOG_PATH, blobSha: fresh.sha })
+      } catch {
+        /* 保留原来的冲突错误，不自动重试写入 */
+      }
+    }
+    throw error
+  }
+}
+
+async function refreshAuthenticated(token: string, force: boolean): Promise<void> {
+  const now = Date.now()
+  if (!force && lastAuthCheck !== 0 && now - lastAuthCheck < AUTH_REFRESH_MS) return
+  lastAuthCheck = now
+  notes.loading = true
+  try {
+    const sha = await getCommitSha(token)
     if (sha === notes.commitSha && notes.entries.length > 0 && !notes.truncated) {
       notes.error = ''
       return
@@ -308,11 +433,11 @@ export async function refresh(force = false): Promise<void> {
       notes.truncated = false
       notes.error = ''
       touch()
-      void preloadTexts(sha)
+      void preloadTexts(sha, token)
       return
     }
     if (sha !== notes.commitSha) notes.texts = new Map()
-    const tree = await getContentTree(sha)
+    const tree = await getContentTree(sha, token)
     if (tree.truncated) {
       notes.truncated = true
       notes.entries = []
@@ -326,12 +451,27 @@ export async function refresh(force = false): Promise<void> {
     notes.error = ''
     writeCache()
     touch()
-    void preloadTexts(sha)
+    void preloadTexts(sha, token)
   } catch (error) {
+    if (shouldDropToken(error)) {
+      clearToken()
+      notes.tokenOk = false
+      await refreshAnonymous(true)
+      throw error
+    }
     notes.error = explainError(error)
   } finally {
     notes.loading = false
   }
+}
+
+export async function refresh(force = false, tokenOverride?: string): Promise<void> {
+  const token = tokenOverride ?? readToken()
+  if (!token) {
+    await refreshAnonymous(force)
+    return
+  }
+  await refreshAuthenticated(token, force)
 }
 
 export function applyWrite(result: WriteResult, text?: string, byteLength?: number): void {
@@ -366,8 +506,12 @@ export async function saveText(path: string, text: string): Promise<WriteResult>
   if (!token) throw new GitHubError('需要登录', 401)
   notes.saving = true
   try {
-    const result = await enqueueWrite(() => putText(token, path, text, entryByPath(path)?.sha))
-    applyWrite(result, text, new TextEncoder().encode(text).length)
+    const result = await enqueueWrite(async () => {
+      const written = await putText(token, path, text, entryByPath(path)?.sha)
+      applyWrite(written, text, new TextEncoder().encode(text).length)
+      await syncCatalog(token)
+      return written
+    })
     notes.error = ''
     return result
   } catch (error) {
@@ -409,12 +553,14 @@ export async function removePath(path: string): Promise<WriteResult> {
   if (!entryByPath(path)) throw new GitHubError('这篇还不存在', 404)
   notes.saving = true
   try {
-    const result = await enqueueWrite(() => {
+    const result = await enqueueWrite(async () => {
       const existing = entryByPath(path)
       if (!existing) throw new GitHubError('这篇还不存在', 404)
-      return deleteContent(token, path, existing.sha)
+      const removed = await deleteContent(token, path, existing.sha)
+      applyDelete(removed)
+      await syncCatalog(token)
+      return removed
     })
-    applyDelete(result)
     notes.error = ''
     return result
   } catch (error) {
@@ -438,17 +584,20 @@ export async function uploadFile(path: string, file: File): Promise<WriteResult>
       const text = await file.text()
       const result = await putText(token, path, text, existing?.sha)
       applyWrite(result, text, new TextEncoder().encode(text).length)
+      await syncCatalog(token)
       return result
     }
     const bytes = new Uint8Array(await file.arrayBuffer())
     const result = await putBytes(token, path, bytes, existing?.sha)
     applyWrite(result, undefined, bytes.byteLength)
+    await syncCatalog(token)
     return result
   })
 }
 
 export async function loginWithToken(token: string): Promise<void> {
   await verifyToken(token)
+  await refresh(true, token)
   notes.tokenOk = true
 }
 
@@ -480,7 +629,7 @@ export function startNotes(): void {
         }
       })
   }
-  void refresh(true)
+  void refresh(true).catch(() => undefined)
   const onFocus = () => {
     void refresh(false)
   }
