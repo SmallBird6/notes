@@ -75,6 +75,17 @@ async function removeCurrent(): Promise<void> {
   }
 }
 
+function beginNew(folder: string): void {
+  if (!notes.tokenOk) {
+    tokenDialogOpen.value = true
+    return
+  }
+  const prefix = folder.trim().replace(/^\/+|\/+$/g, '')
+  newPath.value = prefix ? `${prefix}/` : ''
+  newError.value = ''
+  showNew.value = true
+}
+
 function createPage(): void {
   const relative = newPath.value.trim().replace(/^\/+/, '').normalize('NFC')
   if (!relative.toLowerCase().endsWith('.md')) {
@@ -116,7 +127,7 @@ watch(() => route.path, () => {
         </div>
         <button type="button" @click="cycleTheme">{{ themeLabel }}</button>
         <template v-if="notes.tokenOk">
-          <button type="button" @click="showNew = true">新建</button>
+          <button type="button" @click="beginNew('')">新建</button>
           <UploadButton />
           <button v-if="!editing" type="button" @click="editCurrent">编辑</button>
           <button type="button" @click="removeCurrent">删除</button>
@@ -127,7 +138,7 @@ watch(() => route.path, () => {
     </header>
     <p v-if="notes.error" class="banner">{{ notes.error }}</p>
     <div class="app" :class="{ editing, 'sidebar-open': sidebarOpen }">
-      <Sidebar />
+      <Sidebar @create="beginNew" />
       <main class="center">
         <router-view />
       </main>
