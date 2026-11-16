@@ -108,9 +108,6 @@ onBeforeUnmount(() => {
             </svg>
           </button>
           <button class="tree-folder" type="button" @click="toggle(row.key)">
-            <svg class="tree-icon" viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
-              <path d="M1.8 4.2h4l1.3 1.4H14.2V12.6H1.8z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
-            </svg>
             <span class="tree-name">{{ row.node.title }}</span>
           </button>
           <span class="tree-actions">
@@ -129,12 +126,8 @@ onBeforeUnmount(() => {
           :to="row.node.route || '/'"
           class="tree-row tree-link"
           :class="{ active: isActive(row.node) }"
-          :style="{ paddingLeft: `${32 + row.depth * 16}px` }"
+          :style="{ paddingLeft: `${22 + row.depth * 14}px` }"
         >
-          <svg class="tree-icon" viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
-            <path d="M4 2.2h5.1L12.2 5.2V13.8H4z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
-            <path d="M9 2.4V5.3h2.9" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
-          </svg>
           <span class="tree-name">{{ row.node.title }}</span>
         </RouterLink>
       </li>

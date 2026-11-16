@@ -3,7 +3,7 @@ import { ref } from 'vue'
 export const ARTICLE_WIDTH_KEY = 'notes.articleWidth'
 export const BODY_FONT_SIZE_KEY = 'notes.bodyFontSize'
 
-export const DEFAULT_ARTICLE_WIDTH = 960
+export const DEFAULT_ARTICLE_WIDTH = 1080
 export const MIN_ARTICLE_WIDTH = 560
 export const MAX_ARTICLE_WIDTH = 1600
 

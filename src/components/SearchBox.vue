@@ -33,10 +33,14 @@ function go(hit: SearchHit): void {
 
 <template>
   <div class="search">
+    <svg class="search-icon" viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+      <circle cx="7" cy="7" r="4.2" fill="none" stroke="currentColor" stroke-width="1.4" />
+      <path d="M10.2 10.2L13 13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+    </svg>
     <input
       :value="draft"
       type="search"
-      placeholder="搜索标题、路径和正文"
+      placeholder="搜索…"
       aria-label="搜索"
       @input="onInput"
       @focus="open = query.trim().length > 0"

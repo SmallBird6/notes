@@ -117,7 +117,6 @@ watch(() => route.path, () => {
     <header class="topbar">
       <button class="menu" type="button" @click="sidebarOpen = !sidebarOpen">目录</button>
       <RouterLink to="/" class="brand">个人文档</RouterLink>
-      <SearchBox />
       <div class="top-actions">
         <button type="button" :disabled="notes.loading" @click="refresh(true)">{{ notes.loading ? '读取中' : '刷新' }}</button>
         <div class="type-size" role="group" aria-label="正文字号">
@@ -135,6 +134,7 @@ watch(() => route.path, () => {
         </template>
         <button v-else type="button" @click="tokenDialogOpen = true">登录</button>
       </div>
+      <SearchBox />
     </header>
     <p v-if="notes.error" class="banner">{{ notes.error }}</p>
     <div class="app" :class="{ editing, 'sidebar-open': sidebarOpen }">
